@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 
 
-import rospy
-import numpy as np
-from cv_bridge.core import CvBridge
-from epuck.ePuck import ePuck
-from sensor_msgs.msg import Range
-from sensor_msgs.msg import Imu
-from sensor_msgs.msg import Image
-from geometry_msgs.msg import Twist
-from geometry_msgs.msg import Point, Quaternion
-from nav_msgs.msg import Odometry
-from visualization_msgs.msg import Marker
 import math
-import tf
+import socket
 import time
 
+import numpy as np
+import rospy
+import tf
+from cv_bridge.core import CvBridge
+from epuck.ePuck import ePuck
+from geometry_msgs.msg import Point, Quaternion, Twist
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image, Imu, Range
+from visualization_msgs.msg import Marker
+
+TCP_IP = '147.46.67.123'
+TCP_PORT = 6666
+BUFFER_SIZE = 1024
 
 ## Camera parameters
 IMAGE_FORMAT = 'RGB_365'
@@ -41,11 +43,10 @@ sensors = ['accelerometer', 'proximity', 'motor_position', 'light',
 
 class EPuckDriver(object):
     """
-
     :param epuck_name:
     :param epuck_address:
     """
-
+    
     def __init__(self, epuck_name, epuck_address, init_xpos, init_ypos, init_theta):
         self._bridge = ePuck(epuck_address, False)
         self._name = epuck_name
@@ -108,6 +109,9 @@ class EPuckDriver(object):
             #self._bridge.calibrate_proximity_sensors()
 
     def run(self):
+        # Number of Main Robots
+        mainRobotNumber = 4
+
         # Connect to the ePuck
         self._bridge.connect()
 
@@ -161,12 +165,36 @@ class EPuckDriver(object):
         if self.enabled_sensors['floor']:
             self.floor_publisher = rospy.Publisher('floor', Marker)
 
+        posMainRobot_pub = []
+        posMainRobot_msg = []
+
+        for i in range(0, mainRobotNumber):
+            posMainRobot_pub = posMainRobot_pub + [rospy.Publisher('/epuck_robot_' + str(i) + '/mobile_base/cmd_vel', Twist, queue_size = 10)]
+            posMainRobot_msg.append(Twist())
+            
         # Spin almost forever
         #rate = rospy.Rate(7)   # 7 Hz. If you experience "timeout" problems with multiple robots try to reduce this value.
         self.startTime = time.time()
         while not rospy.is_shutdown():
+            # Socket Communication
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((TCP_IP, TCP_PORT))
+            data = s.recv(BUFFER_SIZE)
+            s.close()
+            dataList = data.split(" ")
+            
+            mainRobotCoordinates = []
+            # print dataList
+            for i in range(0, mainRobotNumber):
+                mainRobotCoordinates = [] + [[dataList[4 * i], dataList[4 * i + 1], dataList[4 * i + 2]]]
+ 
             self._bridge.step()
             self.update_sensors()
+            for i in range(0, mainRobotNumber):
+                posMainRobot_msg[i].linear.x = 0.0
+                posMainRobot_msg[i].angular.z = 4.0
+                posMainRobot_pub[i].publish(posMainRobot_msg[i])
+            
             #rate.sleep()	# Do not call "sleep" otherwise the bluetooth communication will hang.
                             # We communicate as fast as possible, this shouldn't be a problem...
 

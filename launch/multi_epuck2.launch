@@ -9,7 +9,7 @@
 	<param name="robot_description" textfile="$(find epuck_driver)/urdf/epuck_urdf.xml"/>
 
 	<group ns="epuck_robot_0">
-		<include file="$(find epuck_driver)/launch/epuck_controller.launch">
+		<include file="$(find epuck_driver)/launch/epuck_controller2.launch">
 			<arg name="epuck_address" value="$(arg robot_address0)"/>
 			<arg name="epuck_name" value="epuck_robot_0"/>
 			<arg name="cam_en" value="false"/>
@@ -30,7 +30,7 @@
 	</group>
 
 	<group ns="epuck_robot_1">
-		<include file="$(find epuck_driver)/launch/epuck_controller.launch">
+		<include file="$(find epuck_driver)/launch/epuck_controller2.launch">
 			<arg name="epuck_address" value="$(arg robot_address1)"/>
 			<arg name="epuck_name" value="epuck_robot_1"/>
 			<arg name="cam_en" value="false"/>
@@ -51,7 +51,7 @@
 	</group>
 
 	<group ns="epuck_robot_2">
-		<include file="$(find epuck_driver)/launch/epuck_controller.launch">
+		<include file="$(find epuck_driver)/launch/epuck_controller2.launch">
 			<arg name="epuck_address" value="$(arg robot_address2)"/>
 			<arg name="epuck_name" value="epuck_robot_2"/>
 			<arg name="cam_en" value="false"/>
@@ -72,7 +72,7 @@
 	</group>
 
 	<group ns="epuck_robot_3">
-		<include file="$(find epuck_driver)/launch/epuck_controller.launch">
+		<include file="$(find epuck_driver)/launch/epuck_controller2.launch">
 			<arg name="epuck_address" value="$(arg robot_address3)"/>
 			<arg name="epuck_name" value="epuck_robot_3"/>
 			<arg name="cam_en" value="false"/>

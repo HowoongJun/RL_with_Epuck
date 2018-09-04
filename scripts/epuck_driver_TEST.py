@@ -1,24 +1,21 @@
 #!/usr/bin/env python
-import math
-import socket
-import time
 
-import numpy as np
+
 import rospy
-import tf
+import numpy as np
 from cv_bridge.core import CvBridge
 from epuck.ePuck import ePuck
-from geometry_msgs.msg import Point, Quaternion, Twist
+from sensor_msgs.msg import Range
+from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Point, Quaternion
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, Imu, Range
 from visualization_msgs.msg import Marker
-from keras.layers import Dense
-from keras.models import Sequential
-from keras.optimizers import Adam
+import math
+import tf
+import time
 
-TCP_IP = '147.46.67.123'
-TCP_PORT = 6666
-BUFFER_SIZE = 1024
 
 ## Camera parameters
 IMAGE_FORMAT = 'RGB_365'
@@ -41,231 +38,19 @@ MOT_STEP_DIST = (WHEEL_CIRCUMFERENCE/1000.0)    # 0.000125 meters per step (m/st
 sensors = ['accelerometer', 'proximity', 'motor_position', 'light',
            'floor', 'camera', 'selector', 'motor_speed', 'microphone']
 
-# Sight Range Boundary Radius
-boundaryRadius = 10
-
-# Goal Position of each Robots
-goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60],  [5, 2.5], [2.5, 5], [0, 2.5], [2.5, 0], [0, 1.25], [0, 3.75], [5, 1.25], [5, 3.75]] 
-
-# Interfering Robot Number
-obsNumber = 0
-
-# Number of Main Robots
-mainRobotNumber = 4
-
-# State Size
-state_size = 2
-
-# Action Size
-action_size = 9
-
-# Radius
-obstacleRadius = 10
-agentRadius = 10
-
-# mode = 0: Const, mode = 1: Linear, mode = 2: Quad
-mode = 2
-
-# A2C(Advantage Actor-Critic) agent
-class A2CAgent:
-    def __init__(self, state_size, action_size):
-        self.load_model1 = True
-        # self.load_model2 = True
-        
-        # get size of state and action
-        self.state_size = state_size
-        self.action_size = action_size
-        self.value_size = 1
-
-        # These are hyper parameters for the Policy Gradient
-        self.discount_factor = 0.99
-        self.actor_lr = 0.00002
-        self.critic_lr = 0.00005
-
-        # create model for policy network
-        self.actor = self.build_actor()
-        self.critic = self.build_critic()
-
-        if self.load_model1:
-            self.actor.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Actor_Rev_180112.h5")
-            self.critic.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Critic_Rev_180112.h5")
-            
-    # approximate policy and value using Neural Network
-    # actor: state is input and probability of each action is output of model
-    def build_actor(self):
-        actor = Sequential()
-        actor.add(Dense(128, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_normal'))
-        actor.add(Dense(self.action_size, activation='softmax', kernel_initializer='glorot_normal'))
-        actor.summary()
-        # See note regarding crossentropy in cartpole_reinforce.py
-        actor.compile(loss='categorical_crossentropy', optimizer=Adam(lr=self.actor_lr))
-        return actor
-
-    # critic: state is input and value of state is output of model
-    def build_critic(self):
-        critic = Sequential()
-        critic.add(Dense(128, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_normal'))
-        critic.add(Dense(self.value_size, activation='linear', kernel_initializer='glorot_normal'))
-        critic.summary()
-        critic.compile(loss="mse", optimizer=Adam(lr=self.critic_lr))
-        return critic
-
-    # using the output of policy network, pick action stochastically
-    def get_action(self, state):
-        policy = self.actor.predict(state, batch_size=1).flatten()
-        return policy
-
-    # update policy network every episode
-    def train_model(self, state, action, reward, next_state, done):
-        target = np.zeros((1, self.value_size))
-        advantages = np.zeros((1, self.action_size))
-
-        value = self.critic.predict(state)[0]
-        next_value = self.critic.predict(next_state)[0]
-
-        if done:
-            advantages[0][action] = reward - value
-            target[0][0] = reward
-        else:
-            advantages[0][action] = reward + self.discount_factor * (next_value) - value
-            target[0][0] = reward + self.discount_factor * next_value
-
-        self.actor.fit(state, advantages, epochs=1, verbose=0)
-        self.critic.fit(state, target, epochs=1, verbose=0)
-
-def stateGenerator(obsPosition, agtPosition, idx):
-    returnSum = []
-    if idx != -1:
-        returnSum = returnSum + [float(agtPosition[0]) - float(obsPosition[idx][0]), float(agtPosition[1]) - float(obsPosition[idx][1])]
-    else:
-        returnSum = returnSum + [float(agtPosition[0]) - float(obsPosition[0]), float(agtPosition[1]) - float(obsPosition[1])]
-    returnSum = np.reshape(returnSum, [1, state_size])
-    return returnSum
-
-def rangeFinder(allObsPos, rangeCenter):
-    countObs = 0
-    rangeObstacle = [[0,0] for _ in range(obsNumber + mainRobotNumber - 1)]
-    allObsAgtDistance = [0 for _ in range(obsNumber + mainRobotNumber - 1)]
-    for i in range(0, obsNumber + mainRobotNumber - 1):
-        allObsAgtDistance[i] = math.sqrt((float(allObsPos[i][0]) - float(rangeCenter[0]))**2 + (float(allObsPos[i][1]) - float(rangeCenter[1]))**2)
-        if math.sqrt((float(rangeCenter[0]) - float(allObsPos[i][0]))**2 + (float(rangeCenter[1]) - float(allObsPos[i][1]))**2) < boundaryRadius:
-            rangeObstacle[countObs] = [float(allObsPos[i][0]), float(allObsPos[i][1])]
-            countObs += 1
-
-    index = np.argmin(allObsAgtDistance)
-    return [countObs, rangeObstacle, index]
-
-def goalFinder(idx, agtPos):
-    goalAngle = 0
-    if goalPos[idx][0] == float(agtPos[0]):
-        if goalPos[idx][1] > float(agtPos[1]):
-            goalAngle = 90 * math.pi / 180
-        else:
-            goalAngle = -90 * math.pi / 180
-    else:
-        goalAngle = math.atan(1.0*(goalPos[idx][1] - float(agtPos[1]))/(goalPos[idx][0] - float(agtPos[0])))
-    if goalPos[idx][0] < float(agtPos[0]):
-        goalAngle += math.pi
-        
-    tmpGoal = [0,0]
-    tmpGoal[0] = float(agtPos[0]) + boundaryRadius * math.cos(goalAngle)
-    tmpGoal[1] = float(agtPos[1]) + boundaryRadius * math.sin(goalAngle)
-    return tmpGoal
-
-def action2degree(action):
-    degree = 0
-    if action == 0:
-        degree = 0
-    elif action == 1:
-        degree = math.pi / 4
-    elif action == 2:
-        degree = math.pi / 2
-    elif action == 3:
-        degree = math.pi * 3 / 4
-    elif action == 4:
-        degree = math.pi
-    elif action == 5:
-        degree  = -3 * math.pi / 4
-    elif action == 6:
-        degree = -1 * math.pi / 2
-    elif action == 7:
-        degree = -1 * math.pi / 4
-
-    return degree
-
-def takeAction(desiredHeading, robotYaw):
-    linearX = 0
-    angularZ = 0
-    angularVelocityCalibration = 0.5
-    maxSpeed = 2.0
-
-    # Just for correcting my mistakes done by learning process
-    if desiredHeading == 2:
-        desiredHeading = 7
-    elif desiredHeading == 7:
-        desiredHeading = 2
-    
-    # Match Coordinates
-    if robotYaw > math.pi:
-        robotYaw = robotYaw - math.pi * 2
-
-    # Convert Action into Desired Degree
-    desiredDegree = action2degree(desiredHeading)
-
-    # If desired degree matches with the current robot orientation, go max speed
-    if desiredDegree == robotYaw:
-        linearX = maxSpeed
-        angularZ = 0
-    else:
-        angularDiff = robotYaw - desiredDegree
-        if angularDiff > math.pi:
-            angularDiff = angularDiff - math.pi * 2
-        elif angularDiff < -math.pi:
-            angularDiff = angularDiff + math.pi * 2
-        delimeter = 2
-        if mode == 1:
-            delimeter = 2
-            if angularDiff >= 0:
-                linearX = -2 * maxSpeed / math.pi * angularDiff + maxSpeed
-            elif angularDiff < 0:
-                linearX = 2 * maxSpeed / math.pi * angularDiff + maxSpeed
-        elif mode == 2:
-            delimeter = math.sqrt(2)
-            linearX = -2 * maxSpeed / (math.pi * math.pi) * (angularDiff * angularDiff) + maxSpeed
-        
-        if abs(angularDiff) == math.pi:
-            if mode == 0:
-                linearX = -maxSpeed
-            angularZ = 0
-        elif abs(angularDiff) <= math.pi / delimeter:
-            if mode == 0:
-                linearX = maxSpeed
-            angularZ = angularDiff * angularVelocityCalibration
-        elif angularDiff > math.pi / delimeter:
-            if mode == 0:
-                linearX = -maxSpeed
-            angularZ = (angularDiff - math.pi) * angularVelocityCalibration
-        elif angularDiff < -1 * math.pi / delimeter:
-            if mode == 0:
-                linearX = -maxSpeed
-            angularZ = (angularDiff + math.pi) * angularVelocityCalibration
-        if desiredHeading == 8:
-            linearX = 0
-            angularZ = 0
-    return [linearX, angularZ]
-
-
+mainRobotNumber = 2
 
 class EPuckDriver(object):
     """
+
     :param epuck_name:
     :param epuck_address:
     """
-    
+
     def __init__(self, epuck_name, epuck_address, init_xpos, init_ypos, init_theta):
         self._bridge = ePuck(epuck_address, False)
         self._name = epuck_name
-        
+
         self.enabled_sensors = {s: None for s in sensors}
 
         self.prox_publisher = []
@@ -332,13 +117,10 @@ class EPuckDriver(object):
 
         # Disconnect when rospy is going to down
         rospy.on_shutdown(self.disconnect)
-        
+
         self.greeting()
 
         self._bridge.step()
-
-        # Actor Critic Agent
-        agent = A2CAgent(state_size, action_size)
 
         # Subscribe to Commando Velocity Topic
         rospy.Subscriber("mobile_base/cmd_vel", Twist, self.handler_velocity)
@@ -379,121 +161,7 @@ class EPuckDriver(object):
 
         if self.enabled_sensors['floor']:
             self.floor_publisher = rospy.Publisher('floor', Marker)
-
-        posMainRobot_pub = []
-        posMainRobot_msg = []
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((TCP_IP, TCP_PORT))
         
-        print "connected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-
-        for i in range(0, mainRobotNumber):
-            posMainRobot_pub = posMainRobot_pub + [rospy.Publisher('/epuck_robot_' + str(i) + '/mobile_base/cmd_vel', Twist, queue_size = 10)]
-            posMainRobot_msg.append(Twist())
-
-        # Initialize goalReached flag
-        goalReached = []
-        for i in range(0, mainRobotNumber):
-            goalReached = goalReached + [False]
-
-        # Spin almost forever
-        #rate = rospy.Rate(7)   # 7 Hz. If you experience "timeout" problems with multiple robots try to reduce this value.
-        self.startTime = time.time()
-        while not rospy.is_shutdown():
-
-            # Socket Communication
-            data = s.recv(BUFFER_SIZE)
-            s.send("OK")
-
-            dataList = data.split(" ")
-            # print data
-            mainRobotCoordinates = []
-            # print dataList
-            for i in range(0, mainRobotNumber):
-                mainRobotCoordinates = mainRobotCoordinates + [[dataList[4 * i], dataList[4 * i + 1], dataList[4 * i + 2]]]
-                
-            self._bridge.step()
-            self.update_sensors()
-
-
-            # For Test
-            # for curRobNo in range(0, mainRobotNumber):
-            #     posMainRobot_msg[curRobNo].linear.x = 0.0
-            #     posMainRobot_msg[curRobNo].angular.z = 0.0
-            #     posMainRobot_pub[curRobNo].publish(posMainRobot_msg[curRobNo])
-                
-            # Obstacle Robot Coordinates. In the point of current robot, other main robots are regarded as obstacles
-            obst_coordinates = []
-            interfRobot_coordinates = []
-
-            for curRobNo in range(0, mainRobotNumber):
-                tmpAction = []
-
-                obst_coordinates = interfRobot_coordinates
-
-                for i in range(0, mainRobotNumber):
-                    if i != curRobNo:
-                        obst_coordinates = obst_coordinates + [mainRobotCoordinates[i]]
-                
-                [rangeObsNumber, rangeObsPos, _] = rangeFinder(obst_coordinates, mainRobotCoordinates[curRobNo])
-
-                for i in range(0, rangeObsNumber):
-                    state = stateGenerator(rangeObsPos, mainRobotCoordinates[curRobNo], i)
-                    policyArr = agent.get_action(state)
-                    if i == 0:
-                        tmpAction = (1 - policyArr)
-                    else:
-                        tmpAction = tmpAction * (1 - policyArr)
-
-                if tmpAction != []:
-                    for j in range(0,action_size):
-                        if tmpAction[j] > 0.999:
-                            tmpAction[j] = 1
-                        elif tmpAction[j] > 0.995:
-                            tmpAction[j] = 0.1
-                        else:
-                            tmpAction[j] = 0
-                    tmpArgMax = np.argmax(tmpAction)
-                
-                if rangeObsNumber == 0:
-                    tmpAction = [1.0/action_size for _ in range(0,action_size)]
-                tmpGoalPos = goalFinder(curRobNo, mainRobotCoordinates[curRobNo])
-                state = stateGenerator(tmpGoalPos, mainRobotCoordinates[curRobNo], -1)
-                policyArr = agent.get_action(state)
-                if np.mean(tmpAction) == 0:
-                    rospy.logwarn("No Action Selected! Random Action")
-                    tmpAction[tmpArgMax] = 1
-
-                tmpAction = tmpAction * np.asarray(policyArr)
-
-                tmpAction = tmpAction / np.sum(tmpAction)
-                action = np.random.choice(action_size, 1, p = tmpAction)[0]
-
-                linearX = 0
-                angularZ = 0
-                [linearX, angularZ] = takeAction(action, float(mainRobotCoordinates[curRobNo][2]) * math.pi / 180)
-
-                if(math.sqrt((float(mainRobotCoordinates[curRobNo][0]) - goalPos[curRobNo][0])**2 + (float(mainRobotCoordinates[curRobNo][1]) - goalPos[curRobNo][1])**2) <= agentRadius):
-                    if goalReached[curRobNo] == False:
-                        print str(curRobNo) + "Robot has reached the goal !"
-                    goalReached[curRobNo] = True
-                # print "1th: " + str(mainRobotCoordinates[1])
-                # print str(mainRobotCoordinates)
-                # print "2nd: " + str(mainRobotCoordinates[2])
-
-                posMainRobot_msg[curRobNo].linear.x = linearX * 1.0
-                posMainRobot_msg[curRobNo].angular.z = angularZ
-                # posMainRobot_msg[3].linear.x = 0
-                # posMainRobot_msg[1].linear.x = 0
-                # posMainRobot_msg[2].linear.x = 0
-                # posMainRobot_msg[3].angular.z = 0
-                # posMainRobot_msg[1].angular.z = 0
-                # posMainRobot_msg[2].angular.z = 0
-                posMainRobot_pub[curRobNo].publish(posMainRobot_msg[curRobNo])
-                # print str(linearX) + "," + str(angularZ)
-        s.close()
-
             #rate.sleep()	# Do not call "sleep" otherwise the bluetooth communication will hang.
                             # We communicate as fast as possible, this shouldn't be a problem...
 
@@ -735,17 +403,46 @@ class EPuckDriver(object):
         right_vel = wr * 1000.
         self._bridge.set_motors_speed(left_vel, right_vel)
 
+# def runRobots():
+
+#     posMainRobot_pub = []
+#     posMainRobot_msg = []
+
+#     for i in range(0, mainRobotNumber):
+#         posMainRobot_pub = posMainRobot_pub + [rospy.Publisher('/epuck_robot_' + str(i) + '/mobile_base/cmd_vel', Twist, queue_size = 10)]
+#         posMainRobot_msg.append(Twist())
+
+#     # Spin almost forever
+#     #rate = rospy.Rate(7)   # 7 Hz. If you experience "timeout" problems with multiple robots try to reduce this value.
+#     while not rospy.is_shutdown():
+
+#         curRobNo = -1
+
+#         if self._name == "epuck_robot_0":
+#             curRobNo = 0
+#         elif self._name == "epuck_robot_1":
+#             curRobNo = 1
+#         elif self._name == "epuck_robot_2":
+#             curRobNo = 2
+#         elif self._name == "epuck_robot_3":
+#             curRobNo = 3
+        
+#         posMainRobot_msg[curRobNo].linear.x = 0.0
+#         posMainRobot_msg[curRobNo].angular.z = -4.0
+#         posMainRobot_pub[curRobNo].publish(posMainRobot_msg[curRobNo])
+        
 
 def run():
     rospy.init_node("epuck_drive", anonymous=True)
-    epuck_address = rospy.get_param("~epuck_address")
-    epuck_name = rospy.get_param("~epuck_name", "epuck")
-    init_xpos = rospy.get_param("~xpos", 0.0)
-    init_ypos = rospy.get_param("~ypos", 0.0)
-    init_theta = rospy.get_param("~theta", 0.0)
+    # epuck_address = rospy.get_param("~epuck_address")
+    # epuck_name = rospy.get_param("~epuck_name", "epuck")
+    # init_xpos = rospy.get_param("~xpos", 0.0)
+    # init_ypos = rospy.get_param("~ypos", 0.0)
+    # init_theta = rospy.get_param("~theta", 0.0)
     #print "init x, y, th: " + str(init_xpos) + ", " + str(init_ypos) + ", " + str(init_theta)
 
-    EPuckDriver(epuck_name, epuck_address, init_xpos, init_ypos, init_theta).run()
+    EPuckDriver("epuck_robot_0", "10:00:E8:AD:77:2C", 0.0, 0.0, 0.0).run()
+    EPuckDriver("epuck_robot_1", "10:00:E8:AD:79:D4", 0.0, 0.0, 0.0).run()
 
 
 if __name__ == "__main__":

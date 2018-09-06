@@ -14,8 +14,8 @@
 			<arg name="epuck_name" value="epuck_robot_0"/>
 			<arg name="cam_en" value="false"/>
     		<arg name="acc_en" value="false"/>
-    		<arg name="prox_en" value="true"/>
-			<arg name="mot_pos_en" value="true"/>
+    		<arg name="prox_en" value="false"/>
+			<arg name="mot_pos_en" value="false"/>
 			<arg name="light_en" value="false"/>
 			<arg name="floor_en" value="false"/>
 			<arg name="sel_en" value="false"/> <!--this command is available only in ascii mode-->
@@ -35,8 +35,8 @@
 			<arg name="epuck_name" value="epuck_robot_1"/>
 			<arg name="cam_en" value="false"/>
     		<arg name="acc_en" value="false"/>
-    		<arg name="prox_en" value="true"/>
-			<arg name="mot_pos_en" value="true"/>
+    		<arg name="prox_en" value="false"/>
+			<arg name="mot_pos_en" value="false"/>
 			<arg name="light_en" value="false"/>
 			<arg name="floor_en" value="false"/>
 			<arg name="sel_en" value="false"/> <!--this command is available only in ascii mode-->
@@ -56,8 +56,8 @@
 			<arg name="epuck_name" value="epuck_robot_2"/>
 			<arg name="cam_en" value="false"/>
     		<arg name="acc_en" value="false"/>
-    		<arg name="prox_en" value="true"/>
-			<arg name="mot_pos_en" value="true"/>
+    		<arg name="prox_en" value="false"/>
+			<arg name="mot_pos_en" value="false"/>
 			<arg name="light_en" value="false"/>
 			<arg name="floor_en" value="false"/>
 			<arg name="sel_en" value="false"/> <!--this command is available only in ascii mode-->
@@ -77,8 +77,8 @@
 			<arg name="epuck_name" value="epuck_robot_3"/>
 			<arg name="cam_en" value="false"/>
     		<arg name="acc_en" value="false"/>
-    		<arg name="prox_en" value="true"/>
-			<arg name="mot_pos_en" value="true"/>
+    		<arg name="prox_en" value="false"/>
+			<arg name="mot_pos_en" value="false"/>
 			<arg name="light_en" value="false"/>
 			<arg name="floor_en" value="false"/>
 			<arg name="sel_en" value="false"/> <!--this command is available only in ascii mode-->

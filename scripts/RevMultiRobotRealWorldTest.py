@@ -42,11 +42,11 @@ sensors = ['accelerometer', 'proximity', 'motor_position', 'light',
            'floor', 'camera', 'selector', 'motor_speed', 'microphone']
 
 # Sight Range Boundary Radius
-boundaryRadius = 10
+boundaryRadius = 30
 
 # Goal Position of each Robots
-goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60],  [5, 2.5], [2.5, 5], [0, 2.5], [2.5, 0], [0, 1.25], [0, 3.75], [5, 1.25], [5, 3.75]] 
-
+goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60]] 
+ 
 # Interfering Robot Number
 obsNumber = 0
 
@@ -87,8 +87,10 @@ class A2CAgent:
         self.critic = self.build_critic()
 
         if self.load_model1:
-            self.actor.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Actor_Rev_180112.h5")
-            self.critic.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Critic_Rev_180112.h5")
+            self.actor.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Actor_Rev_171222_3600.h5")
+            self.critic.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Critic_Rev_171222_3600.h5")
+            # self.actor.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Actor_Rev_180112.h5")
+            # self.critic.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Critic_Rev_180112.h5")
             
     # approximate policy and value using Neural Network
     # actor: state is input and probability of each action is output of model
@@ -196,8 +198,8 @@ def action2degree(action):
 def takeAction(desiredHeading, robotYaw):
     linearX = 0
     angularZ = 0
-    angularVelocityCalibration = 0.5
-    maxSpeed = 2.0
+    angularVelocityCalibration = 1.0
+    maxSpeed = 3.0
 
     # Just for correcting my mistakes done by learning process
     if desiredHeading == 2:
@@ -386,7 +388,7 @@ class EPuckDriver(object):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((TCP_IP, TCP_PORT))
         
-        print "connected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        print "Connected!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 
         for i in range(0, mainRobotNumber):
             posMainRobot_pub = posMainRobot_pub + [rospy.Publisher('/epuck_robot_' + str(i) + '/mobile_base/cmd_vel', Twist, queue_size = 10)]
@@ -482,16 +484,43 @@ class EPuckDriver(object):
                 # print str(mainRobotCoordinates)
                 # print "2nd: " + str(mainRobotCoordinates[2])
 
-                posMainRobot_msg[curRobNo].linear.x = linearX * 1.0
-                posMainRobot_msg[curRobNo].angular.z = angularZ
+                posMainRobot_msg[curRobNo].linear.x = linearX
+                posMainRobot_msg[curRobNo].angular.z = -angularZ
+                
+                if dataList[curRobNo * 4 + 3] < 80:
+                    posMainRobot_msg[curRobNo].linear.x = 0
+                    posMainRobot_msg[curRobNo].angular.z = 0
+                    print "Not reliable data"
+
+                if goalReached[curRobNo]:
+                    posMainRobot_msg[curRobNo].linear.x = 0
+                    posMainRobot_msg[curRobNo].angular.z = 0
+                
                 # posMainRobot_msg[3].linear.x = 0
-                # posMainRobot_msg[1].linear.x = 0
-                # posMainRobot_msg[2].linear.x = 0
                 # posMainRobot_msg[3].angular.z = 0
+                # posMainRobot_msg[1].linear.x = 0
                 # posMainRobot_msg[1].angular.z = 0
-                # posMainRobot_msg[2].angular.z = 0
                 posMainRobot_pub[curRobNo].publish(posMainRobot_msg[curRobNo])
-                # print str(linearX) + "," + str(angularZ)
+            #     print str(curRobNo) + ": " + str(posMainRobot_msg[curRobNo])
+            #     print str(goalPos[curRobNo]) + "," + str(rangeObsNumber)
+            #     print str(mainRobotCoordinates[curRobNo])
+                # print "ACTION: " + str(action)
+                # print str(curRobNo) + ": " + str(rangeObsNumber)
+            # print "========================================================================="
+            tmpCount = 1
+            for i in range(0, mainRobotNumber):
+                tmpCount = tmpCount * goalReached[i]
+            
+            if tmpCount == 1:
+                tmpGoal = goalPos[1]
+                goalPos[1] = goalPos[3]
+                goalPos[3] = tmpGoal
+                tmpGoal = goalPos[2]
+                goalPos[2] = goalPos[0]
+                goalPos[0] = tmpGoal
+                print "Goal Point Changed to " + str(goalPos)
+                for i in range(0, mainRobotNumber):
+                    goalReached[i] = False
         s.close()
 
             #rate.sleep()	# Do not call "sleep" otherwise the bluetooth communication will hang.

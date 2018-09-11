@@ -6,6 +6,7 @@ import time
 import numpy as np
 import rospy
 import tf
+import random
 from cv_bridge.core import CvBridge
 from epuck.ePuck import ePuck
 from geometry_msgs.msg import Point, Quaternion, Twist
@@ -45,7 +46,7 @@ sensors = ['accelerometer', 'proximity', 'motor_position', 'light',
 boundaryRadius = 30
 
 # Goal Position of each Robots
-goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60]] 
+goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60], [-35, 25]] 
  
 # Interfering Robot Number
 obsNumber = 0
@@ -495,7 +496,9 @@ class EPuckDriver(object):
                 if goalReached[curRobNo]:
                     posMainRobot_msg[curRobNo].linear.x = 0
                     posMainRobot_msg[curRobNo].angular.z = 0
-                
+
+                # posMainRobot_msg[4].linear.x = random.randrange(-2, 5)
+                # posMainRobot_msg[4].angular.z = random.randrange(-2, 3)
                 # posMainRobot_msg[3].linear.x = 0
                 # posMainRobot_msg[3].angular.z = 0
                 # posMainRobot_msg[1].linear.x = 0

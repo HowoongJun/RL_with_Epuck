@@ -46,13 +46,17 @@ sensors = ['accelerometer', 'proximity', 'motor_position', 'light',
 boundaryRadius = 30
 
 # Goal Position of each Robots
-goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60], [-35, 25]] 
+# goalPos = [[-5, -10], [-75, -10], [-75, 60], [-5, 60], [-75, 25], [-5, 25]] 
+
+# Goal Position for 5 robot scenario
+goalPos = [[0, 80], [-60, 80], [-75, 25], [-30, -15], [15, 25]]
+
  
 # Interfering Robot Number
 obsNumber = 0
 
 # Number of Main Robots
-mainRobotNumber = 4
+mainRobotNumber = 5
 
 # State Size
 state_size = 2
@@ -88,8 +92,10 @@ class A2CAgent:
         self.critic = self.build_critic()
 
         if self.load_model1:
-            self.actor.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Actor_Rev_171222_3600.h5")
-            self.critic.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Critic_Rev_171222_3600.h5")
+            # self.actor.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Actor_Rev.h5")
+            # self.critic.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Critic_Rev.h5")
+            self.actor.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Actor_Rev_180912.h5")
+            self.critic.load_weights("/home/howoongjun/RLPractice/Practice/Practice004_DataSave/Backup/Critic_Rev_180912.h5")
             # self.actor.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Actor_Rev_180112.h5")
             # self.critic.load_weights("/home/howoongjun/catkin_ws/src/simple_create/src/DataSave/backup/Critic_Rev_180112.h5")
             
@@ -166,10 +172,11 @@ def goalFinder(idx, agtPos):
         else:
             goalAngle = -90 * math.pi / 180
     else:
+
         goalAngle = math.atan(1.0*(goalPos[idx][1] - float(agtPos[1]))/(goalPos[idx][0] - float(agtPos[0])))
     if goalPos[idx][0] < float(agtPos[0]):
         goalAngle += math.pi
-        
+
     tmpGoal = [0,0]
     tmpGoal[0] = float(agtPos[0]) + boundaryRadius * math.cos(goalAngle)
     tmpGoal[1] = float(agtPos[1]) + boundaryRadius * math.sin(goalAngle)
@@ -256,7 +263,6 @@ def takeAction(desiredHeading, robotYaw):
             linearX = 0
             angularZ = 0
     return [linearX, angularZ]
-
 
 
 class EPuckDriver(object):
@@ -419,7 +425,6 @@ class EPuckDriver(object):
             self._bridge.step()
             self.update_sensors()
 
-
             # For Test
             # for curRobNo in range(0, mainRobotNumber):
             #     posMainRobot_msg[curRobNo].linear.x = 0.0
@@ -515,15 +520,18 @@ class EPuckDriver(object):
                 tmpCount = tmpCount * goalReached[i]
             
             if tmpCount == 1:
-                tmpGoal = goalPos[1]
-                goalPos[1] = goalPos[3]
-                goalPos[3] = tmpGoal
-                tmpGoal = goalPos[2]
-                goalPos[2] = goalPos[0]
-                goalPos[0] = tmpGoal
-                print "Goal Point Changed to " + str(goalPos)
-                for i in range(0, mainRobotNumber):
-                    goalReached[i] = False
+                break
+            
+            # if tmpCount == 1:
+            #     tmpGoal = goalPos[1]
+            #     goalPos[1] = goalPos[3]
+            #     goalPos[3] = tmpGoal
+            #     tmpGoal = goalPos[2]
+            #     goalPos[2] = goalPos[0]
+            #     goalPos[0] = tmpGoal
+            #     print "Goal Point Changed to " + str(goalPos)
+            #     for i in range(0, mainRobotNumber):
+            #         goalReached[i] = False
         s.close()
 
             #rate.sleep()	# Do not call "sleep" otherwise the bluetooth communication will hang.

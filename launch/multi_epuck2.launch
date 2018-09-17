@@ -4,7 +4,7 @@
 	<arg name="robot_address1" value="10:00:E8:AD:77:62"/>	<!--2170-->
 	<arg name="robot_address2" value="10:00:E8:AD:75:AD"/>	<!--2494-->
 	<arg name="robot_address3" value="10:00:E8:AD:79:D4"/>	<!--2163-->
-	<!--<arg name="robot_address4" value="10:00:E8:AD:79:D3"/>-->  <!--2467-->
+	<arg name="robot_address4" value="10:00:E8:AD:79:D3"/>  <!--2467-->
 
 	<param name="robot_description" textfile="$(find epuck_driver)/urdf/epuck_urdf.xml"/>
 
@@ -92,7 +92,7 @@
 		<!--<node pkg="tf" type="static_transform_publisher" name="epuck_robot_3_tf" args="0 0 0 0 0 0 /base_link /epuck_robot_3/base_link 30"/>-->
 	</group>
 
-<!-- 
+
 	<group ns="epuck_robot_4">
 		<include file="$(find epuck_driver)/launch/epuck_controller.launch">
 			<arg name="epuck_address" value="$(arg robot_address4)"/>
@@ -112,7 +112,7 @@
 			<arg name="is_single_robot" value="0"/>
 		</include>
 		
-	</group> -->
+	</group>
 
 	<!-- <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find epuck_driver)/config/multi_epuck_driver_rviz.rviz"/> -->
 
